@@ -61,36 +61,47 @@ namespace LibreHardwareMonitor.Hardware.Controller.KyoudaiKen
         private void updateSensors()
         {
             if (!_serialPort.IsOpen) return;
-            _serialPort.DiscardInBuffer();
-            _serialPort.DiscardOutBuffer();
 
-            _serialPort.WriteLine("rs");
-            int j = 0;
-            while (_serialPort.BytesToRead < 127 && j < 10)
+            try
             {
-                Thread.Sleep(20);
-                j++;
-            }
+                _serialPort.DiscardInBuffer();
+                _serialPort.DiscardOutBuffer();
 
-            string data = String.Empty;
-            while (_serialPort.BytesToRead > 0)
-            {
-                char b = (char)_serialPort.ReadByte();
-                if(b!='\n') data += b;
-            }
-            data = data.TrimEnd('\r');
-            if (data.Length < 96) return; //not all data received, we try again on the next interval
-            string[] vT, vM, vS;
-            int iT = data.IndexOf("t") + 2;
-            int iM = data.IndexOf("m") + 2;
-            int iS = data.IndexOf("s") + 2;
-            vT = data.Substring(iT, iM - iT - 4).Split(' ');
-            vM = data.Substring(iM, iS - iM - 4).Split(' ');
-            vS = data.Substring(iS).Split(' ');
+                _serialPort.WriteLine("bs");
+                int i = 0;
+                while (_serialPort.BytesToRead != 36 && i < 60)
+                {
+                    Thread.Sleep(10);
+                    i++;
+                }
 
-            for(int i = 0; i < vT.Length; i++)
+                if (_serialPort.BytesToRead == 36)
+                {
+                    byte[] data = new byte[36];
+
+                    i = 0;
+                    while (_serialPort.BytesToRead > 0)
+                    {
+                        data[i] = (byte)_serialPort.ReadByte();
+                        i++;
+                    }
+
+                    for (i = 0; i < 3; i++)
+                    {
+                        t[i] = BitConverter.ToSingle(data, i * 4);
+                    }
+                    for (; i < 6; i++)
+                    {
+                        m[i - 3] = BitConverter.ToSingle(data, i * 4);
+                    }
+                    for (; i < 9; i++)
+                    {
+                        s[i - 6] = BitConverter.ToSingle(data, i * 4);
+                    }
+                }
+            } catch (Exception)
             {
-                _temperatures[i].Value = float.Parse(vT[i], CultureInfo.InvariantCulture);
+                //KyoudaiKen FC01 - Timeout or general IO error.
             }
             for (int i = 0; i < vM.Length; i++)
             {
